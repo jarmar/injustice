@@ -1,8 +1,7 @@
 $ injustice -h
+usage: injustice [-h] [-v] (-i | -o OUTPUT_FILE) EPUB_FILE [EPUB_FILE ...]
 
-usage: injustice [-h] [-v] (-i | -o OUTPUT_FILE) EPUB_FILE
-
-Remove text justification from an EPUB file.
+Remove text justification from a EPUB files.
 
 positional arguments:
   EPUB_FILE
@@ -12,9 +11,10 @@ optional arguments:
   -v, --verbose         print verbose output
   -i, --in-place        modify input file in-place
   -o OUTPUT_FILE, --output-file OUTPUT_FILE
-                        output to OUTPUT_FILE
+                        output to OUTPUT_FILE (only supports a single
+                        EPUB_FILE)
 
 Some e-readers, such as the Kobo Glo HD, do not allow the user to change the
 text justification setting if it has been explicitly set by the CSS, which
 very often is the case. This program removes all occurences of "text-align:
-justify" in the CSS files included in an EPUB file.
+justify" in the CSS files included in EPUB files.

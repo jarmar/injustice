@@ -9,16 +9,16 @@ import textwrap
 from zipfile import ZipFile
 
 parser = argparse.ArgumentParser(
-        description="Remove text justification from an EPUB file.",
+        description="Remove text justification from a EPUB files.",
         epilog=textwrap.dedent("""\
                 Some e-readers, such as the Kobo Glo HD, do not allow the user
                 to change the text justification setting if it has been
                 explicitly set by the CSS, which very often is the case.
 
                 This program removes all occurences of "text-align: justify" in
-                the CSS files included in an EPUB file.
+                the CSS files included in EPUB files.
                 """))
-parser.add_argument("input_file", metavar="EPUB_FILE")
+parser.add_argument("input_files", nargs="+", metavar="EPUB_FILE")
 
 parser.add_argument("-v", "--verbose", help="print verbose output",
                     action="store_true")
@@ -27,7 +27,7 @@ output_group = parser.add_mutually_exclusive_group(required=True)
 output_group.add_argument("-i", "--in-place", action="store_true",
                           help="modify input file in-place")
 output_group.add_argument("-o", "--output-file", metavar="OUTPUT_FILE",
-                          help="output to OUTPUT_FILE")
+                          help="output to OUTPUT_FILE (only supports a single EPUB_FILE)")
 
 def process_css_contents(contents):
     # Remove just the minimal substring, i.e. keep line breaks and surrounding
@@ -40,33 +40,47 @@ def process_css_contents(contents):
     else:
         return False, contents
 
-if __name__ == "__main__":
-    args = parser.parse_args()
+def process_file(input_file, verbose):
     # Build up a new ZipFile with the same structure and content as the old one.
     # Note that file order is important for EPUB files.
     result = io.BytesIO()
-    with ZipFile(args.input_file, "r") as epub_input:
+    if verbose:
+        print(f"Opening {input_file}")
+    with ZipFile(input_file, "r") as epub_input:
         with ZipFile(result, "w") as epub_output:
             epub_output.comment = epub_input.comment
             for info_to_copy in epub_input.infolist():
                 data_to_copy = epub_input.read(info_to_copy)
                 if info_to_copy.filename.endswith("css"):
+                    if verbose:
+                        print(f"  Processing {info_to_copy.filename}")
                     matched, data_to_copy = process_css_contents(data_to_copy)
-                    if args.verbose and matched:
-                        print(f"Replacing at least one occurrence in {info_to_copy.filename}")
+                    if verbose and matched:
+                        print(f"    Replacing at least one occurrence in {info_to_copy.filename}")
                 # Since the first argument is a ZipInfo, all metadata should be
                 # preserved (including the modification date, even for modified
                 # files).
                 epub_output.writestr(info_to_copy, data_to_copy)
+    return result
 
-    # Argparse should ensure that exactly one is true.
-    output_filepath = None
-    if args.output_file:
-        output_filepath = args.output_file
-    elif args.in_place:
-        output_filepath = args.input_file
-
-    # Done.
+def do_file(input_file, output_file, verbose):
+    # Note that input_file and output_file may be the same filepath.
+    result = process_file(input_file, verbose)
     result.seek(0)
-    with open(output_filepath, "wb") as output_f:
+    if verbose:
+        print(f"Writing output to {output_file}")
+    with open(output_file, "wb") as output_f:
         shutil.copyfileobj(result, output_f)
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+
+    # Argparse should ensure that exactly one of output_file/in_place is truish.
+    if args.output_file:
+        if len(args.input_files) != 1:
+            print("Error: can only give a single input file with -o/--output-file")
+            sys.exit(1)
+        do_file(args.input_files[0], args.output_file, args.verbose)
+    elif args.in_place:
+        for input_file in args.input_files:
+            do_file(input_file, input_file, args.verbose)

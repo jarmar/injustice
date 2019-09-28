@@ -46,21 +46,21 @@ def process_file(input_file, verbose):
     result = io.BytesIO()
     if verbose:
         print(f"Opening {input_file}")
-    with ZipFile(input_file, "r") as epub_input:
-        with ZipFile(result, "w") as epub_output:
-            epub_output.comment = epub_input.comment
-            for info_to_copy in epub_input.infolist():
-                data_to_copy = epub_input.read(info_to_copy)
-                if info_to_copy.filename.endswith("css"):
-                    if verbose:
-                        print(f"  Processing {info_to_copy.filename}")
-                    matched, data_to_copy = process_css_contents(data_to_copy)
-                    if verbose and matched:
-                        print(f"    Replacing at least one occurrence in {info_to_copy.filename}")
-                # Since the first argument is a ZipInfo, all metadata should be
-                # preserved (including the modification date, even for modified
-                # files).
-                epub_output.writestr(info_to_copy, data_to_copy)
+    with ZipFile(input_file, "r") as epub_input, \
+         ZipFile(result, "w") as epub_output:
+        epub_output.comment = epub_input.comment
+        for info_to_copy in epub_input.infolist():
+            data_to_copy = epub_input.read(info_to_copy)
+            if info_to_copy.filename.endswith("css"):
+                if verbose:
+                    print(f"  Processing {info_to_copy.filename}")
+                matched, data_to_copy = process_css_contents(data_to_copy)
+                if verbose and matched:
+                    print(f"    Replacing at least one occurrence in {info_to_copy.filename}")
+            # Since the first argument is a ZipInfo, all metadata should be
+            # preserved (including the modification date, even for modified
+            # files).
+            epub_output.writestr(info_to_copy, data_to_copy)
     return result
 
 def do_file(input_file, output_file, verbose):

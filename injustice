@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+
+import argparse
+import io
+import re
+import shutil
+import sys
+import textwrap
+from zipfile import ZipFile
+
+parser = argparse.ArgumentParser(
+        description="Remove text justification from an EPUB file.",
+        epilog=textwrap.dedent("""\
+                Some e-readers, such as the Kobo Glo HD, do not allow the user
+                to change the text justification setting if it has been
+                explicitly set by the CSS, which very often is the case.
+
+                This program removes all occurences of "text-align: justify" in
+                the CSS files included in an EPUB file.
+                """))
+parser.add_argument("input_file", metavar="EPUB_FILE")
+
+parser.add_argument("-v", "--verbose", help="print verbose output",
+                    action="store_true")
+
+output_group = parser.add_mutually_exclusive_group(required=True)
+output_group.add_argument("-i", "--in-place", action="store_true",
+                          help="modify input file in-place")
+output_group.add_argument("-o", "--output-file", metavar="OUTPUT_FILE",
+                          help="output to OUTPUT_FILE")
+
+def process_css_contents(contents):
+    # Remove just the minimal substring, i.e. keep line breaks and surrounding
+    # whitespace as-is. This is slightly crude, but harder to get wrong.
+    important = r"!\s*important\s*"
+    pattern = rf"text-align\s*:\s*justify\s*({important})?;?"
+    pattern = pattern.encode()
+    if re.search(pattern, contents) is not None:
+        return True, re.sub(pattern, b"", contents)
+    else:
+        return False, contents
+
+if __name__ == "__main__":
+    args = parser.parse_args()
+    # Build up a new ZipFile with the same structure and content as the old one.
+    # Note that file order is important for EPUB files.
+    result = io.BytesIO()
+    with ZipFile(args.input_file, "r") as epub_input:
+        with ZipFile(result, "w") as epub_output:
+            epub_output.comment = epub_input.comment
+            for info_to_copy in epub_input.infolist():
+                data_to_copy = epub_input.read(info_to_copy)
+                if info_to_copy.filename.endswith("css"):
+                    matched, data_to_copy = process_css_contents(data_to_copy)
+                    if args.verbose and matched:
+                        print(f"Replacing at least one occurrence in {info_to_copy.filename}")
+                # Since the first argument is a ZipInfo, all metadata should be
+                # preserved (including the modification date, even for modified
+                # files).
+                epub_output.writestr(info_to_copy, data_to_copy)
+
+    # Argparse should ensure that exactly one is true.
+    output_filepath = None
+    if args.output_file:
+        output_filepath = args.output_file
+    elif args.in_place:
+        output_filepath = args.input_file
+
+    # Done.
+    result.seek(0)
+    with open(output_filepath, "wb") as output_f:
+        shutil.copyfileobj(result, output_f)
